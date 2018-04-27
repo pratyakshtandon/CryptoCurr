@@ -1,4 +1,3 @@
-
 from flask import Flask, session, g
 from flask import render_template, json, redirect, url_for, request, flash
 from flask_security import Security, SQLAlchemyUserDatastore
@@ -157,16 +156,17 @@ def create_user():
         print("No Users found, creating test user")
         db.create_all()
         user_datastore.create_user(email='ryan@gordon.com', password='password', confirmed_at=datetime.datetime.now())
-        r = requests.get('https://poloniex.com/public?command=returnTicker')
+        #r = requests.get('https://poloniex.com/public?command=returnTicker')
         # Pull JSON market data from Bittrex
         b = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummaries')
         # Print value to user and assign to variable
-        data = r.json()
+        data = b.json()
         # Print value to user and assign to variable
         data = b.json()
-
-        for key in data.keys():
-            u = Currency(ticker=key, last=data[key]['last'], ask=data[key]['lowestAsk'], bid=data[key]['highestBid'], timestamp=datetime.datetime.now())
+        data = byteify(data)
+        data = data['result']
+        for key in range(len(data)):
+            u = Currency(ticker=data[key]['MarketName'], last=data[key]['Last'], ask=data[key]['Ask'], bid=data[key]['Bid'], timestamp=datetime.datetime.now())
             db.session.add(u)
 
         db.session.commit()
@@ -177,7 +177,6 @@ def create_user():
 Views/ Routes for the webapp. homepage, login and register have their own pages.
 All other pages inherit from the index.html page which holds the UI for the webapp (menu and nav)
 This is done using Jinja2 Syntaxing Engine. Designed by the Flask team, pocoo
-
 """
 # The default route. Provides a landing page with info about the app and options to login/register
 
@@ -296,11 +295,11 @@ def addNewStock():
 def addNewCurrency():
     amount = request.form['Amount']  # Amount taken from posted form
     ticker = request.form['Ticker'].upper()  # Ticker taken from posted form
-    currency = Currency.query.filter_by(ticker='BTC_'+ticker).first()  # query the db for currency
-    usd2btc = Currency.query.filter_by(ticker='USDT_BTC').first()
+    currency = Currency.query.filter_by(ticker='BTC-'+ticker).first()  # query the db for currency
+    usd2btc = Currency.query.filter_by(ticker='USDT-BTC').first()
     fiat = requests.get('http://api.fixer.io/latest?base=USD')
     usd2fiat = fiat.json()
-    queriedCur = UserCurrency.query.filter_by(ticker='BTC_'+ticker, id=current_user.id).first()
+    queriedCur = UserCurrency.query.filter_by(ticker='BTC-'+ticker, id=current_user.id).first()
     if currency is not None:
         if queriedCur is not None:
             queriedCur.amount += Decimal(amount)
@@ -386,101 +385,110 @@ def chart():
 # for averaged data for crypto currencies. In my api I have set up averaged prices for a number of top
 # cryptocurrencies. It is my hope after this project it may be improved by the open source community.
 """
-
-@app.route('/api/sdc')
-@login_required
-def BTC_SDC():
-    # Pull JSON market data from Poloniex
-    r = requests.get('https://poloniex.com/public?command=returnTicker')
-    # Pull JSON market data from Bittrex
-    b = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummaries')
-    data = r.json()
-    # Print value to user and assign to variable
-    bittrex = b.json()
-    # In this section highBid and lowAsk are unicode
-    poloHighBid = data['BTC_SDC']['highestBid']
-    poloLowAsk = data['BTC_SDC']['lowestAsk']
-    # In order to sum the values and not all the values for the list we need to convert the vars to floats
-    # Float allows us to add the decimal numbers together with precision
-    poloLast = float(data['BTC_SDC']['last'])
-    # Get bittrex data for current market
-    bittrexLast = float(bittrex['result'][134]['Last'])
-    pricesList = [poloLast, bittrexLast]
-    # Calc avg between 3 markets
-    avgPrice = sum(pricesList) / float(len(pricesList))
-    # Fill JSON with lowAsk highBid price avgBid
-    providedJson = {"poloLast": poloLast, "bittrexLast": bittrexLast, "priceObject": pricesList, "poloLow": poloLowAsk, "poloHighBid": poloHighBid}
-
-    # data['BTC_SDC']
-    return json.dumps(providedJson)
-    # end function
-
-
-@app.route('/api/eth')
-def BTC_ETH():
-    # Pull JSON market data from Poloniex
-    r = requests.get('https://poloniex.com/public?command=returnTicker')
-    # Pull JSON market data from Bittrex
-    b = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummaries')
-    # Print value to user and assign to variable
-    data = r.json()
-    # Print value to user and assign to variable
-    bittrex = b.json()
-    # In this section highBid and lowAsk are unicode
-    poloHighBid = data['BTC_ETH']['highestBid']
-    poloLowAsk = data['BTC_ETH']['lowestAsk']
-    # In order to sum the values and not all the values for the list we need to convert the vars to floats
-    # Float allows us to add the decimal numbers together with precision
-    poloLast = float(data['BTC_ETH']['last'])
-    # Get bittrex data for current market
-    bittrexLast = float(bittrex['result'][61]['Last'])
-    pricesList = [poloLast, bittrexLast]
-    # Calc avg between 3 markets
-    avgPrice = sum(pricesList) / float(len(pricesList))
-
-    marketName = bittrex['result'][61]['MarketName']
-    # Fill JSON with lowAsk highBid price avgBid
-    providedJson = {"Market Name": marketName, "poloLast": poloLast, "bittrexLast": bittrexLast, "priceObject": pricesList, "poloLow": poloLowAsk, "poloHighBid": poloHighBid}
-
-    # data['BTC_SDC']
-    return json.dumps(providedJson)
-    # end function
-
-
-@app.route('/api/xmr')
-def BTC_XMR():
-    # Pull JSON market data from Poloniex
-    r = requests.get('https://poloniex.com/public?command=returnTicker')
-    # Pull JSON market data from Bittrex
-    b = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummaries')
-    # Print value to user and assign to variable
-    data = r.json()
-    # Print value to user and assign to variable
-    bittrex = b.json()
-    # In this section highBid and lowAsk are unicode
-    poloHighBid = data['BTC_XMR']['highestBid']
-    poloLowAsk = data['BTC_XMR']['lowestAsk']
-    # In order to sum the values and not all the values for the list we need to convert the vars to floats
-    # Float allows us to add the decimal numbers together with precision
-    poloLast = float(data['BTC_XMR']['last'])
-    # Get bittrex data for current market
-    bittrexLast = float(bittrex['result'][193]['Last'])
-    pricesList = [poloLast, bittrexLast]
-    # Calc avg between 3 markets
-    avgPrice = sum(pricesList) / float(len(pricesList))
-
-    marketName = bittrex['result'][193]['MarketName']
-    # Fill JSON with lowAsk highBid price avgBid
-    providedJson = {"Market Name": marketName, "poloLast": poloLast, "bittrexLast": bittrexLast, "priceObject": pricesList, "poloLow": poloLowAsk, "poloHighBid": poloHighBid}
-
-    return json.dumps(providedJson)
-    # end function
-"""
-# Bind to PORT if defined, otherwise default to 5000.
-# I have this here as Heroku or Digital Ocean will needs the ability to specify a port
-# I run the app on 0.0.0.0 so that I can use and consume the app on mobile devices.
-# When in GMIT if I do this anyone on the eduroam system can access the webapp using <computers ip>:5000
-# Remove this and it will default to localhost. I keep it this way as I designed for mobile users also.
-"""
+def byteify(input):
+    if isinstance(input, dict):
+        return {byteify(key): byteify(value)
+                for key, value in input.iteritems()}
+    elif isinstance(input, list):
+        return [byteify(element) for element in input]
+    elif isinstance(input, unicode):
+        return input.encode('utf-8')
+    else:
+        return input
+# @app.route('/api/sdc')
+# @login_required
+# def BTC_SDC():
+#     # Pull JSON market data from Poloniex
+#     r = requests.get('https://poloniex.com/public?command=returnTicker')
+#     # Pull JSON market data from Bittrex
+#     b = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummaries')
+#     data = r.json()
+#     # Print value to user and assign to variable
+#     bittrex = b.json()
+#     # In this section highBid and lowAsk are unicode
+#     poloHighBid = data['BTC_SDC']['highestBid']
+#     poloLowAsk = data['BTC_SDC']['lowestAsk']
+#     # In order to sum the values and not all the values for the list we need to convert the vars to floats
+#     # Float allows us to add the decimal numbers together with precision
+#     poloLast = float(data['BTC_SDC']['last'])
+#     # Get bittrex data for current market
+#     bittrexLast = float(bittrex['result'][134]['Last'])
+#     pricesList = [poloLast, bittrexLast]
+#     # Calc avg between 3 markets
+#     avgPrice = sum(pricesList) / float(len(pricesList))
+#     # Fill JSON with lowAsk highBid price avgBid
+#     providedJson = {"poloLast": poloLast, "bittrexLast": bittrexLast, "priceObject": pricesList, "poloLow": poloLowAsk, "poloHighBid": poloHighBid}
+#
+#     # data['BTC_SDC']
+#     return json.dumps(providedJson)
+#     # end function
+#
+#
+# @app.route('/api/eth')
+# def BTC_ETH():
+#     # Pull JSON market data from Poloniex
+#     r = requests.get('https://poloniex.com/public?command=returnTicker')
+#     # Pull JSON market data from Bittrex
+#     b = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummaries')
+#     # Print value to user and assign to variable
+#     data = r.json()
+#     # Print value to user and assign to variable
+#     bittrex = b.json()
+#     # In this section highBid and lowAsk are unicode
+#     poloHighBid = data['BTC_ETH']['highestBid']
+#     poloLowAsk = data['BTC_ETH']['lowestAsk']
+#     # In order to sum the values and not all the values for the list we need to convert the vars to floats
+#     # Float allows us to add the decimal numbers together with precision
+#     poloLast = float(data['BTC_ETH']['last'])
+#     # Get bittrex data for current market
+#     bittrexLast = float(bittrex['result'][61]['Last'])
+#     pricesList = [poloLast, bittrexLast]
+#     # Calc avg between 3 markets
+#     avgPrice = sum(pricesList) / float(len(pricesList))
+#
+#     marketName = bittrex['result'][61]['MarketName']
+#     # Fill JSON with lowAsk highBid price avgBid
+#     providedJson = {"Market Name": marketName, "poloLast": poloLast, "bittrexLast": bittrexLast, "priceObject": pricesList, "poloLow": poloLowAsk, "poloHighBid": poloHighBid}
+#
+#     # data['BTC_SDC']
+#     return json.dumps(providedJson)
+#     # end function
+#
+#
+# @app.route('/api/xmr')
+# def BTC_XMR():
+#     # Pull JSON market data from Poloniex
+#     r = requests.get('https://poloniex.com/public?command=returnTicker')
+#     # Pull JSON market data from Bittrex
+#     b = requests.get('https://bittrex.com/api/v1.1/public/getmarketsummaries')
+#     # Print value to user and assign to variable
+#     data = r.json()
+#     # Print value to user and assign to variable
+#     bittrex = b.json()
+#     # In this section highBid and lowAsk are unicode
+#     poloHighBid = data['BTC_XMR']['highestBid']
+#     poloLowAsk = data['BTC_XMR']['lowestAsk']
+#     # In order to sum the values and not all the values for the list we need to convert the vars to floats
+#     # Float allows us to add the decimal numbers together with precision
+#     poloLast = float(data['BTC_XMR']['last'])
+#     # Get bittrex data for current market
+#     bittrexLast = float(bittrex['result'][193]['Last'])
+#     pricesList = [poloLast, bittrexLast]
+#     # Calc avg between 3 markets
+#     avgPrice = sum(pricesList) / float(len(pricesList))
+#
+#     marketName = bittrex['result'][193]['MarketName']
+#     # Fill JSON with lowAsk highBid price avgBid
+#     providedJson = {"Market Name": marketName, "poloLast": poloLast, "bittrexLast": bittrexLast, "priceObject": pricesList, "poloLow": poloLowAsk, "poloHighBid": poloHighBid}
+#
+#     return json.dumps(providedJson)
+#     # end function
+# """
+# # Bind to PORT if defined, otherwise default to 5000.
+# # I have this here as Heroku or Digital Ocean will needs the ability to specify a port
+# # I run the app on 0.0.0.0 so that I can use and consume the app on mobile devices.
+# # When in GMIT if I do this anyone on the eduroam system can access the webapp using <computers ip>:5000
+# # Remove this and it will default to localhost. I keep it this way as I designed for mobile users also.
+#
 port = int(os.environ.get('PORT', 5000))
 app.run(host='0.0.0.0', port=port)
